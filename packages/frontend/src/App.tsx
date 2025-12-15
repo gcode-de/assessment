@@ -1,92 +1,15 @@
 import { type FormEvent, useEffect, useState } from "react";
-import { AlertTriangle, Info, Loader2, Moon, Sun, Upload } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Info, Loader2, Moon, Search, Sun, Upload } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert";
 import { Button } from "./components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card";
 import { Input } from "./components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "./components/ui/table";
-
-type CsvPreview = {
-  columns: string[];
-  rows: string[][];
-  totalRows: number;
-  invalidRows: number;
-  delimiter: string;
-  source: "backend" | "client" | "sample";
-  filename?: string;
-  errors?: string[];
-};
+import { useCsvView } from "./hooks/useCsvView";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "/api";
-const MAX_PREVIEW_ROWS = 50;
-
-function splitCsvLine(line: string, delimiter: string) {
-  const cells: string[] = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
-
-    if (char === '"') {
-      const isEscapedQuote = inQuotes && line[i + 1] === '"';
-      if (isEscapedQuote) {
-        current += '"';
-        i += 1;
-        continue;
-      }
-      inQuotes = !inQuotes;
-      continue;
-    }
-
-    if (char === delimiter && !inQuotes) {
-      cells.push(current.trim());
-      current = "";
-      continue;
-    }
-
-    current += char;
-  }
-
-  cells.push(current.trim());
-  return cells;
-}
-
-function parseCsvText(text: string): Omit<CsvPreview, "source"> {
-  const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
-
-  if (!lines.length) {
-    throw new Error("CSV-Datei ist leer.");
-  }
-
-  const delimiter = lines[0].includes(";") ? ";" : ",";
-  const columns = splitCsvLine(lines[0], delimiter);
-
-  if (!columns.length) {
-    throw new Error("Konnte Header nicht lesen.");
-  }
-
-  const rows: string[][] = [];
-  let invalidRows = 0;
-
-  for (const line of lines.slice(1)) {
-    const cells = splitCsvLine(line, delimiter);
-    if (cells.length !== columns.length) {
-      invalidRows += 1;
-      continue;
-    }
-    rows.push(cells);
-  }
-
-  return {
-    columns,
-    rows,
-    totalRows: rows.length + invalidRows,
-    invalidRows,
-    delimiter,
-  };
-}
 
 function App() {
   const [darkMode, setDarkMode] = useState(() => {
@@ -95,9 +18,28 @@ function App() {
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<CsvPreview | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    preview,
+    loading,
+    error,
+    searchTerm,
+    setSearchTerm,
+    columnFilter,
+    setColumnFilter,
+    sortBy,
+    sortDirection,
+    toggleSort,
+    setPage,
+    pageCount,
+    currentPage,
+    pageRows,
+    pageSize,
+    setPageSize,
+    filteredRows,
+    uploadFile,
+    parseLocalFile,
+    setError,
+  } = useCsvView({ apiBase: API_BASE });
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -122,48 +64,7 @@ function App() {
       setError("Bitte wähle eine CSV-Datei aus.");
       return;
     }
-
-    setLoading(true);
-    setError(null);
-
-    const formData = new FormData();
-    formData.append("file", selectedFile);
-
-    try {
-      const response = await fetch(`${API_BASE}/upload`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        let message = "Upload fehlgeschlagen.";
-        try {
-          const payload = await response.json();
-          message = payload.message || payload.error || message;
-        } catch {
-          message = await response.text();
-        }
-        throw new Error(message);
-      }
-
-      const payload = await response.json();
-
-      setPreview({
-        columns: payload.columns ?? [],
-        rows: payload.rows ?? [],
-        totalRows: payload.totalRows ?? payload.rows?.length ?? 0,
-        invalidRows: payload.invalidRows ?? payload.errors?.length ?? 0,
-        delimiter: payload.delimiter ?? ";",
-        filename: selectedFile.name,
-        source: "backend",
-        errors: payload.errors,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unbekannter Fehler.";
-      setError(`${message} (Backend unter ${API_BASE} erreichbar?)`);
-    } finally {
-      setLoading(false);
-    }
+    uploadFile(selectedFile);
   };
 
   const handleLocalPreview = async () => {
@@ -171,28 +72,12 @@ function App() {
       setError("Bitte wähle eine CSV-Datei aus.");
       return;
     }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const text = await selectedFile.text();
-      const parsed = parseCsvText(text);
-      setPreview({ ...parsed, source: "client", filename: selectedFile.name });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Konnte Datei nicht lesen.";
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
+    parseLocalFile(selectedFile);
   };
-
-  const visibleRows = preview ? preview.rows.slice(0, MAX_PREVIEW_ROWS) : [];
-  const hiddenRows = preview ? Math.max(preview.rows.length - MAX_PREVIEW_ROWS, 0) : 0;
 
   return (
     <div className={darkMode ? "dark min-h-screen bg-slate-950" : "min-h-screen bg-slate-50"}>
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8">
         <header className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-slate-500">CSV Viewer</p>
@@ -201,7 +86,7 @@ function App() {
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={handleDarkModeToggle} aria-label="Dark-Mode umschalten">
-              {darkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
+              {darkMode ? <Sun className="size-4 text-amber-300" /> : <Moon className="size-4" />}
               <span className="sr-only">Theme umschalten</span>
             </Button>
           </div>
@@ -256,11 +141,11 @@ function App() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="grid gap-4">
           <Card>
             <CardHeader>
               <CardTitle>Vorschau</CardTitle>
-              <CardDescription>Zeigt bis zu {MAX_PREVIEW_ROWS} Zeilen aus dem aktuellen Dataset.</CardDescription>
+              <CardDescription>Suche, filtere, sortiere und blättere durch die geladenen Daten.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {!preview && <p className="text-sm text-slate-600 dark:text-slate-300">Noch keine Daten geladen.</p>}
@@ -279,24 +164,74 @@ function App() {
                     <span>Ungültige Zeilen: {preview.invalidRows}</span>
                   </div>
 
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="relative w-full max-w-md">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                      <Input
+                        placeholder="Suchen..."
+                        className="pl-10"
+                        value={searchTerm}
+                        onChange={(event) => {
+                          setSearchTerm(event.target.value);
+                          setPage(1);
+                        }}
+                      />
+                    </div>
+
+                    <Select
+                      value={columnFilter}
+                      onValueChange={(value) => {
+                        setColumnFilter(value);
+                        setPage(1);
+                      }}
+                      disabled={!preview.columns.length}
+                    >
+                      <SelectTrigger aria-label="Spalte filtern">
+                        <SelectValue placeholder="Alle Spalten" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Alle Spalten</SelectItem>
+                        {preview.columns.map((col) => (
+                          <SelectItem key={col || "col"} value={col || "col"}>
+                            {col || "Spalte"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div className="rounded-lg border bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          {preview.columns.map((column) => (
-                            <TableHead key={column}>{column || "Spalte"}</TableHead>
-                          ))}
+                          {preview.columns.map((column) => {
+                            const isActive = sortBy === column;
+                            const Icon = isActive ? (sortDirection === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+                            return (
+                              <TableHead key={column} className="whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  className="flex items-center gap-1 font-medium text-slate-700 hover:text-slate-900 dark:text-slate-200 dark:hover:text-white"
+                                  onClick={() => toggleSort(column)}
+                                  aria-label={`Sortiere nach ${column || "Spalte"}`}
+                                >
+                                  <span>{column || "Spalte"}</span>
+                                  <Icon className={`size-3 ${isActive ? "text-primary" : "text-slate-400"}`} />
+                                </button>
+                              </TableHead>
+                            );
+                          })}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {visibleRows.map((row, rowIndex) => (
+                        {pageRows.map((row, rowIndex) => (
                           <TableRow key={`${rowIndex}-${row.join("-")}`}>
                             {preview.columns.map((_, cellIndex) => (
                               <TableCell key={`${rowIndex}-${cellIndex}`}>{row[cellIndex] ?? ""}</TableCell>
                             ))}
                           </TableRow>
                         ))}
-                        {!visibleRows.length && (
+                        {!pageRows.length && (
                           <TableRow>
                             <TableCell colSpan={preview.columns.length} className="text-center text-sm text-slate-500">
                               Keine gültigen Daten gefunden.
@@ -306,10 +241,53 @@ function App() {
                       </TableBody>
                       {preview && (
                         <TableCaption>
-                          Zeigt {visibleRows.length} Zeilen{hiddenRows > 0 ? ` (+ ${hiddenRows} weitere)` : ""}.
+                          {filteredRows.length} Zeilen nach Filterung · Seite {currentPage} von {pageCount}
                         </TableCaption>
                       )}
                     </Table>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600 dark:text-slate-300">
+                    <div className="flex items-center gap-2">
+                      <span>Zeilen pro Seite:</span>
+                      <Select
+                        value={String(pageSize)}
+                        onValueChange={(value) => {
+                          setPageSize(Number(value));
+                          setPage(1);
+                        }}
+                      >
+                        <SelectTrigger size="sm" aria-label="Seitengröße">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[10, 20, 50, 100].map((size) => (
+                            <SelectItem key={size} value={String(size)}>
+                              {size}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setPage((prev) => Math.max(1, prev - 1))} disabled={currentPage <= 1}>
+                        <ChevronLeft className="size-4" />
+                        Zurück
+                      </Button>
+                      <span>
+                        Seite {currentPage} / {pageCount}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPage((prev) => Math.min(pageCount, prev + 1))}
+                        disabled={currentPage >= pageCount}
+                      >
+                        Weiter
+                        <ChevronRight className="size-4" />
+                      </Button>
+                    </div>
                   </div>
 
                   {preview.errors?.length ? (

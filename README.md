@@ -3,28 +3,6 @@ Probeaufgabe Anacision – CSV Viewer
 ## Struktur
 
 - [packages/frontend](packages/frontend): React + Vite CSV-Viewer mit Upload, Vorschau und Fehlerindikatoren
-- [packages/backend](packages/backend): Platzhalter für die REST-API (noch nicht implementiert)
-
-## Setup
-
-```bash
-npm install
-npm run dev       # Frontend starten
-npm run build     # Frontend bauen
-npm run lint      # ESLint
-npm run preview   # Produktionsbuild lokal ansehen
-```
-
-## Frontend/API
-
-- Standard-Endpunkt: `${VITE_API_BASE || '/api'}/upload` (POST, multipart/form-data, Feldname `file`).
-- Erwartetes Response-JSON: `columns: string[]`, `rows: string[][]`, optional `totalRows`, `invalidRows`, `delimiter`, `errors`.
-- Ohne laufendes Backend steht ein Browser-Fallback zum lokalen Parsen zur Verfügung.
-  Probeaufgabe Anacision – CSV Viewer
-
-## Struktur
-
-- [packages/frontend](packages/frontend): React + Vite CSV-Viewer mit Upload, Vorschau und Fehlerindikatoren
 - [packages/backend](packages/backend): Express REST-API für CSV-Upload und -Parsing
 
 ## Setup
@@ -96,8 +74,8 @@ Das Backend parst hochgeladene CSV-Dateien, erkennt den Delimiter automatisch (S
 - Response (Beispiel):
   ```json
   {
-  	"rows": [["Wert1", "Wert2"], ...],
-  	"totalRows": 995
+    "rows": [["Wert1", "Wert2"], ...],
+    "totalRows": 995
   }
   ```
   `totalRows` enthält die Anzahl der Treffer nach Anwendung von Suche/Filter; ungültige Zeilen bleiben in `invalidRows` aus dem Upload-Response ersichtlich.
@@ -121,6 +99,7 @@ Nur **Remote-Modus**: Nach dem Upload wird eine ID vergeben, alle Operationen (P
 - Pagination mit konfigurierbarer Seitengröße (10/20/50/100)
 - Dark-Mode-Unterstützung
 - Fehleranzeige für ungültige Zeilen aus dem Upload
+- Upload, Vorschau, Suche/Filter pro Spalte, Sortierung, Pagination
 
 ### Fehlerbehandlung
 
