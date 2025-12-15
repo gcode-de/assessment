@@ -20,11 +20,6 @@ export function useCsvView({ apiBase }: UseCsvViewOptions) {
   const [csvId, setCsvId] = useState<string | null>(null);
   const [serverTotalRows, setServerTotalRows] = useState(0);
 
-  // Seite wird immer auf 1 gesetzt, wenn Preview sich ändert
-  useEffect(() => {
-    setPage(1);
-  }, [preview]);
-
   // Debounce search input to reduce API calls
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
@@ -81,6 +76,8 @@ export function useCsvView({ apiBase }: UseCsvViewOptions) {
         source: "backend",
         errors: payload.errors,
       });
+      // Immer auf Seite 1 starten, wenn eine neue Datei hochgeladen wurde
+      setPage(1);
       // Fetch first page
       await fetchPage(payload.id ?? "", 1, pageSize);
     } catch (err) {
